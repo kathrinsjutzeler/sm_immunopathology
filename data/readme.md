@@ -53,7 +53,6 @@ pop:  indicates control or parasite population used for the infection
 no_cercariae: number of cercariae used for the infection  
 no_cercariae_remain: number of cercariae counted in the water after the infection    
 no_heads_remain: number of cercariae heads in the water after the infection  
-penetration_rate: calculated penetration rate  
 days_infected: number of days the mouse was infected for  
 status: mouse lived (0) or died (1) before the infection period was over  
 cercariae	penrate: calculated infection rate
