@@ -1,4 +1,4 @@
-,...1,Length (µm),Area (µm^2),Comments,Type,...6,Sample,Slide,host,pop
+Record no,Number,Length (µm),Area (µm^2),Comments,Shape,Type,Sample,Slide,host,pop
 1,1,1085.85,56996.04,0,Polygon,+,10D,1,C57BL/6,LE
 2,2,1489.96,81424.19,0,Polygon,+,10D,1,C57BL/6,LE
 3,3,1599.59,88085.01,0,Polygon,+,10D,1,C57BL/6,LE
