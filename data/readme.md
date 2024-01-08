@@ -59,15 +59,16 @@ cercariae	penrate: calculated infection rate
 
 ## granuloma_data.csv  
 This file includes all granuloma area measurements to generate figure 3E. 
+
 **Description of columns**  
-	...1: Granuloma count per slide
- Length (Âµm): Lenght of annotation
- Area (Âµm^2): Area of annotation
- Comments: Comments
- Type: Annotation format
- ...6: Addition or Substraction of annotation
- Sample: Mouse ID
- Slide: Slide number
- host: Mouse host strain
- pop: Parasite population
+...1: Granuloma count per slide  
+Length (Âµm): Lenght of annotation  
+Area (Âµm^2): Area of annotation  
+Comments: Comments  
+Type: Annotation format  
+...6: Addition or Substraction of annotation  
+Sample: Mouse ID  
+Slide: Slide number  
+host: Mouse host strain  
+pop: Parasite population
 
