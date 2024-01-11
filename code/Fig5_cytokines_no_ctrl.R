@@ -176,8 +176,9 @@ plot_IL4 <- f_plot(IL4) +
   geom_text(data = stat_IL4, aes(label = paste0(method, ', p = ',p)), y = 17000) +
   geom_text(data = IL4_host, aes(label = p.adj.signif), vjust = -0.5, y = 7000)
 
-
-# Plot IL-5 ===================================================================
+#+++++++++++++++
+# Plot IL-5 ####
+#+++++++++++++++
 
 # Perform stats
 stat_IL5 <- cytokine_df %>%
@@ -202,9 +203,9 @@ plot_IL5 <- f_plot(IL5) +
   geom_text(data = subset(IL5_host, pop != 'LE'), aes(label = p.adj.signif), vjust = -0.5, y = 1400) +
   geom_text(data = subset(IL5_host, pop == 'LE'), aes(label = p.adj), vjust = -0.5, y = 1400) 
 
-#+++++++++++++++++
-# Plot IL6 =================================================================
-#+++++++++++++++++
+#++++++++++++++
+# Plot IL6 ####
+#++++++++++++++
 # Perform stats
 stat_IL6 <- cytokine_df %>%
   filter(pop != 'Ctrl') %>%
@@ -253,8 +254,9 @@ plot_IL10 <- f_plot(IL10) +
   geom_text(data = stat_IL10, aes(label = paste0(method, ', p = ',p)), y = 270)  +
   geom_text(data = IL10_host, aes(label = p.adj.signif), vjust = -0.5, y = 100)
 
-
-# Plot IL13 ==================================================================
+#+++++++++++++++
+# Plot IL13 ####
+#+++++++++++++++
 
 # Perform stats
 stat_IL13 <- cytokine_df %>%
