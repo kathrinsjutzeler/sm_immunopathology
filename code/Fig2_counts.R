@@ -1,7 +1,7 @@
 # Figure 2 - Parasite data
 # Author: Kathrin Jutzeler
 # Date: May 16, 2023
-# Last updated
+# Last updated: January 11, 2024
 # R version 4.2.0, tidyverse version 1.3.2, ggplot2 3.3.6      ✔ purrr   0.3.4 
 #✔ tibble  3.1.8      ✔ dplyr   1.0.10
 #✔ tidyr   1.2.0      ✔ stringr 1.4.1 
@@ -48,6 +48,7 @@ all_df$host <- as.factor(all_df$host)
 
 f_letters <- function(output, mouse) {
   # Subset the data to separate hosts
+
   output <- subset(output, host == mouse)
   
   # Convert the tibble to a data frame with row names 
@@ -206,8 +207,42 @@ all_df %>%
   t_test(total_eggs ~ host) %>%
   adjust_pvalue(method = 'BH')
   
+
+## Correlation plot ####
+p_liver_cor <- ggplot(subset(all_df, pop != "Control"), aes(total_eggs, liver_wt_norm, color = pop)) +
+  geom_point(size = 1) +
+  geom_smooth(method = "lm", se = FALSE) +
+  #scale_color_manual(values = my_color2) +
+  ylab("Liver weight in % of body weight") +
+  xlab("Total eggs") + 
+  theme_minimal() +
+  stat_cor(method = "spearman", label.y = c(10.5, 11, 11.5,12), show.legend = F, p.accuracy = 0.001) +
+  my_theme() +
+  scale_color_manual(values = my_color) +
+  theme(legend.position = 'bottom', axis.title.x = element_text(), axis.ticks.x = element_line()) +
+  labs('Total egg counts', color = 'Population') 
+
+all_df %>%
+  filter(pop != 'Control') %>%
+  group_by(pop) %>%
+  rstatix::cor_test(total_eggs, method = 'spearman') %>%
+  filter(var2 %in% c('liver_wt_norm', 'spleen_wt_norm'))
+   
+p_spleen_cor <- ggplot(subset(all_df, pop != "Control"), aes(total_eggs, spleen_wt_norm, color = pop)) +
+  geom_point(size = 1) +
+  geom_smooth(method = "lm", se = FALSE) +
+  #scale_color_manual(values = my_color2) +
+  ylab("Spleen weight in % of body weight") +
+  xlab("Total eggs") + 
+  theme_minimal() +
+  stat_cor(method = "spearman", label.y = c(3.5,3.8,4.1,4.4), show.legend = F,p.accuracy = 0.001) +
+  my_theme() +
+  scale_color_manual(values = my_color) +
+  theme(legend.position = 'bottom', axis.title.x = element_text(),axis.ticks.x = element_line()) +
+  labs('Total egg counts', color = 'Population') 
+
   
-# Plot total eggs
+# Plot total eggs ####
 plot_C <- 
   ggplot(subset(all_df, pop != "Control"), aes(pop, total_eggs)) +
   geom_boxplot(aes(fill = pop)) +
@@ -486,6 +521,14 @@ dev.off()
 pdf("Additional file FigureS1.pdf", width = 5, height = 4)
 
 (plot_ratio) +# | plot_spacer()) / (plot_spacer()) / (plot_spacer())  
+  plot_annotation(tag_levels = c("A")) &
+  theme(plot.tag = element_text(face = 'bold'))
+
+dev.off()
+
+pdf("Additional file 5 FigureS5.pdf", width = 10, height = 4)
+
+(p_liver_cor + p_spleen_cor) + plot_layout(guides = 'collect') & theme(legend.position = 'bottom') &
   plot_annotation(tag_levels = c("A")) &
   theme(plot.tag = element_text(face = 'bold'))
 

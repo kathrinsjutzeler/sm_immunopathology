@@ -1,7 +1,7 @@
 # GLM models for all paramters
 # Author: Kathrin Jutzeler
 # Date: May 16, 2023
-# Last updated: September 7, 2023
+# Last updated: January 11, 2024
 # R version 4.2.0, tidyverse version 1.3.2, ggplot2 3.3.6      ✔ purrr   0.3.4 
 #✔ tibble  3.1.8      ✔ dplyr   1.0.10
 #✔ tidyr   1.2.0      ✔ stringr 1.4.1 
@@ -74,11 +74,12 @@ ggplot(all_df, aes(intestine_eggs, liver_eggs)) +
 
 # Set up functions ============================================================
 
-# Generate all GLMs
+# Generate all GLMs (update formula as needed)
 f_glm <- function(trait){
   f <- paste0(trait, "~ pop * host + total_eggs")
   
   trait_glm <- glm(f,  data = subset(all_df))
+  BIC(trait_glm)
 }
 
 # Use log transformation for all cytokines
@@ -103,8 +104,34 @@ traits <- c("liver_wt_norm", "spleen_wt_norm", "intestine_length", "fibrosis", "
 traits_list <- as.list(traits)
 names(traits_list) <- traits
 
-# Run all GLMs and then assess fit individually
-glms <- lapply(traits_list, f_glm)
+# Run all GLMs and then assess fit individually 
+glms1 <- unlist(lapply(traits_list, f_glm))
+glms1_log <- unlist(lapply(traits_list, f_glm))
+glms1_sqr <- unlist(lapply(traits_list, f_glm))
+
+glms2 <- unlist(lapply(traits_list, f_glm))
+glms2_log <- unlist(lapply(traits_list, f_glm))
+glms2_sqr <- unlist(lapply(traits_list, f_glm))
+
+BIC_df <- as.data.frame(bind_rows(glms1, glms1_log, glms1_sqr, glms2, glms2_log, glms2_sqr))
+
+rownames(BIC_df) <- c('Add_model', 'Add_model_log', 'Add_model_sqr', 'Int_model', 'Int_model_log', 'Int_model_log_sqr')
+
+#                   liver_wt_norm spleen_wt_norm intestine_length  fibrosis  granuloma     IFNy     TNFa      IL2      IL4
+#Add_model             181.63893      116.86062        420.58365 310.39659 717.224504 935.3715 816.1280 525.3908 845.8684
+#Add_model_log         -14.22255       41.28769        -91.45245  31.56421  -6.152508 147.6285 167.8184 146.8752 164.6778
+#Add_model_sqr          21.58498       12.88111        106.14251 109.30916 311.007848 456.5624 394.7244 266.0456 426.4326
+#Int_model             156.29188      140.31086        430.70609 315.85668 737.535586 954.1792 815.8207 532.8003 867.2252
+#Int_model_log         -35.51240       55.49360        -82.97572  42.44724  14.191014 167.0693 186.3674 161.7777 186.3067
+#Int_model_log_sqr      -1.86456       33.12262        115.45507 117.23059 331.365059 473.6788 405.0026 279.4457 447.4236
+                        #IL5       IL6     IL10     IL13
+#Add_model         653.0489 1006.5493 491.6327 401.8197
+#Add_model_log     121.7591  170.0837 146.4944 140.6940
+#Add_model_sqr     315.2386  498.2163 246.7373 199.4491
+#Int_model         668.7505 1028.3070 507.1051 411.8048
+#Int_model_log     138.4241  187.8463 158.1629 157.4093
+#Int_model_log_sqr 333.1793  517.6708 259.6127 215.2623
+
 
 # Do the same with cytokines
 
@@ -119,16 +146,22 @@ cytokine_glms <- lapply(cytokine_list, f_glm_cyto)
 
 # Models
 #liver_glm <- glm(liver_wt_norm ~ pop * host + total_eggs, data = all_df)
-liver_glm1 <- glm(sqrt(liver_wt_norm) ~ pop * host + total_eggs, data = all_df, family = gaussian)
-#liver_glm2 <- glm(log(liver_wt_norm) ~ pop * host * total_eggs, data = all_df, family = gaussian)
+#liver_glm1 <- glm(log(liver_wt_norm) ~ pop * host + total_eggs, data = all_df, family = gaussian)
+liver_glm2 <- glm(log(liver_wt_norm) ~ pop * host * total_eggs, data = all_df, family = gaussian)
 
-summary(liver_glm1)
+#all_df$log_liver <- log(all_df$liver_wt_norm)
+
+#flexplot::visualize(glm(log_liver ~ pop * host * total_eggs, data = all_df, family = gaussian))
+
+#flexplot::model.comparison(liver_glm1, liver_glm2)
+
+summary(liver_glm2)
 
 plot(liver_glm1, 1) # evaluate plots 1:3
 
 # Use transformed model, better fit and not much of a different outcome
-tbl_liver <- 
-tbl_regression(liver_glm1, label = labels) %>% 
+tbl_liver2 <- 
+tbl_regression(liver_glm2, label = labels) %>% 
   modify_caption("**Table 2. Generalized linear model output for all traits**") %>%
   bold_p(t = 0.05) %>%
   bold_labels() %>%
@@ -167,11 +200,11 @@ tbl_spleen <- tbl_regression(spleen_glm2, label = labels) %>%
 # INTESTINE LENGTH ============================================================
 
 # Models
-intestine_glm <- glm(intestine_length ~ pop * host + total_eggs,  data = all_df)
+intestine_glm <- glm(log(intestine_length) ~ pop * host + total_eggs,  data = all_df)
 
 summary(intestine_glm)
 
-# Use regular model - outcome doesn't change with transformed data
+# Use log transformed model
 tbl_intestine <- tbl_regression(intestine_glm, label = labels) %>% 
   modify_caption("**Table 2. Generalized linear model output for all traits**") %>%
   bold_p(t = 0.05) %>%
@@ -183,12 +216,12 @@ tbl_intestine <- tbl_regression(intestine_glm, label = labels) %>%
 #FIBROTIC AREA ============================================================
 
 # Models
-fibrosis_glm <- glm(fibrosis ~ pop * host + total_eggs,  data = all_df)
+fibrosis_glm <- glm(log(fibrosis) ~ pop * host + total_eggs,  data = all_df)
 
 summary(fibrosis_glm)
 
 # Use regular model - outcome doesn't change with transformed data
-tbl_fibrosis <- tbl_regression(glms$fibrosis, label = labels) %>% 
+tbl_fibrosis <- tbl_regression(fibrosis_glm, label = labels) %>% 
   #modify_caption("**Table 2. Generalized linear model output for spleen weight**") %>%
   bold_p(t = 0.05) %>%
   bold_labels() %>%
@@ -200,7 +233,7 @@ tbl_fibrosis <- tbl_regression(glms$fibrosis, label = labels) %>%
 
 # Models
 
-granuloma_glm <- glm(granuloma ~ pop * host + total_eggs,  data = all_df)
+granuloma_glm <- glm(log(granuloma) ~ pop * host + total_eggs,  data = all_df)
 
 summary(granuloma_glm)
 
@@ -217,9 +250,11 @@ tbl_granuloma <- tbl_regression(glms$granuloma, label = labels) %>%
 
 ## Models
 
-#IFN_glm <- glm(log(IFNy) ~ pop * host + total_eggs,  data = all_df)
+IFN_glm <- glm(log(IFNy) ~ pop * host + total_eggs,  data = all_df)
 
-#summary(IFN_glm)
+summary(IFN_glm)
+
+tbl_regression(IFN_glm, labels = labels) 
 
 # Use predefined model (with log transformation) for all cytokines
 tbl_IFNy <- tbl_regression(cytokine_glms$IFNy, labels = labels) %>% 
@@ -305,11 +340,11 @@ tbl_LYMPH <- tbl_regression(lymph_glm, label = c(CBC_labels, Baseline_LYMPH ~ 'B
   add_global_p(include = c(pop, host, `pop:host`))
 
 #Basophils ===========================================================
-baso_glm <- glm(sqrt(`Week 10_BASO`) ~ pop * host + total_eggs + Baseline_BASO,  data = CBC_df)
+baso_glm <- glm(`Week 10_BASO` ~ pop * host + total_eggs + Baseline_BASO,  data = CBC_df)
 BIC(baso_glm)
 summary(baso_glm)
 
-# Chose transformed model due to better fit
+# Chose regular model due to better fit
 
 tbl_baso <- tbl_regression(baso_glm, label = c(CBC_labels, Baseline_BASO ~ 'Baseline')) %>% 
   bold_p(t = 0.05) %>%
@@ -344,7 +379,7 @@ tbl_cytokines <- lapply(cytokine_glms, f_tbl_cytokine)
 
 # Merge tables ============================================================
 ## Table 2 ####
-tables <- list(tbl_liver, tbl_spleen, tbl_intestine, tbl_fibrosis, tbl_granuloma)
+tables <- list(tbl_liver2, tbl_spleen, tbl_intestine, tbl_fibrosis, tbl_granuloma)
 
 tbl_merge(tbls = tables, 
           tab_spanner = c("**Liver weight**", "**Spleen weight**", '**Intestine length**',
