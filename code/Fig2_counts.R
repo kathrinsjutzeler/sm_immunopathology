@@ -1,7 +1,7 @@
 # Figure 2 - Parasite data
 # Author: Kathrin Jutzeler
 # Date: May 16, 2023
-# Last updated: January 11, 2024
+# Last updated: March 7, 2024
 # R version 4.2.0, tidyverse version 1.3.2, ggplot2 3.3.6      ✔ purrr   0.3.4 
 #✔ tibble  3.1.8      ✔ dplyr   1.0.10
 #✔ tidyr   1.2.0      ✔ stringr 1.4.1 
@@ -17,6 +17,12 @@ library(ggpubr) # stats/plots
 library(ggprism) # add p-value to plot 
 library(plotrix) # for standard error
 library(patchwork) # for output layout
+library(rcompanion) # full ptable
+library(ggrepel)
+library(emmeans) # Mean adjustment for linear models 
+library(multcomp) # Perform mutliple comparisons 
+library(multcompView)
+
 
 # Define theme and colors ####
 my_theme <- function(){theme_minimal() + theme(panel.grid = element_blank(), legend.position = "none", strip.placement = 'outside',
@@ -43,6 +49,10 @@ all_df <- read_csv("all_data.csv")
 
 all_df$pop <- as.factor(all_df$pop)
 all_df$host <- as.factor(all_df$host)
+
+#Normalize by penetration rate
+all_df <- all_df %>%
+  mutate(across(c(-penrate, -host, -pop, -sample), ~ ./penrate))
 
 # Functions ####
 
@@ -122,8 +132,15 @@ p_worm <- all_df %>%
   group_by(host) %>%
   anova_test(total_worms ~ pop) 
 
+all_df %>%
+  filter(pop != "Control") %>%
+  group_by(host) %>%
+  kruskal_test(total_worms ~ pop) 
+
 p_worm$method <- 'ANOVA'
 p_worm$pop <- 'EG'
+
+p_worm$p <-format(round(p_worm$p, 3), nsmall = 3)
 
 # A tibble: 2 x 8
 #host    Effect   DFn   DFd     F     p `p<.05`   ges
@@ -137,6 +154,15 @@ p_worms <- all_df %>%
   tukey_hsd(total_worms ~ pop, p.adjust.methods = 'BH') %>%
   #filter(p.adj <= 0.05, host == "BALB/c") %>%
   add_x_position(x = 'pop')
+
+p_worms2 <- all_df %>%
+  filter(pop != "Control") %>%
+  group_by(host) %>%
+  dunn_test(total_worms ~ pop) %>%
+  adjust_pvalue(method = 'BH') %>%
+  #filter(p.adj <= 0.05, host == "BALB/c") %>%
+  add_x_position(x = 'pop')
+
 
 # Add letters for BALB/c
 letters_w <- f_letters(p_worms, 'BALB/c')
@@ -216,7 +242,7 @@ p_liver_cor <- ggplot(subset(all_df, pop != "Control"), aes(total_eggs, liver_wt
   ylab("Liver weight in % of body weight") +
   xlab("Total eggs") + 
   theme_minimal() +
-  stat_cor(method = "spearman", label.y = c(10.5, 11, 11.5,12), show.legend = F, p.accuracy = 0.001) +
+  stat_cor(method = "spearman", label.x = 8000, label.y = c(12.5,13, 13.5,14), show.legend = F, p.accuracy = 0.001) +
   my_theme() +
   scale_color_manual(values = my_color) +
   theme(legend.position = 'bottom', axis.title.x = element_text(), axis.ticks.x = element_line()) +
@@ -235,7 +261,7 @@ p_spleen_cor <- ggplot(subset(all_df, pop != "Control"), aes(total_eggs, spleen_
   ylab("Spleen weight in % of body weight") +
   xlab("Total eggs") + 
   theme_minimal() +
-  stat_cor(method = "spearman", label.y = c(3.5,3.8,4.1,4.4), show.legend = F,p.accuracy = 0.001) +
+  stat_cor(method = "spearman", label.x = 8000, label.y = c(4.1,4.4, 4.7, 5), show.legend = F,p.accuracy = 0.001) +
   my_theme() +
   scale_color_manual(values = my_color) +
   theme(legend.position = 'bottom', axis.title.x = element_text(),axis.ticks.x = element_line()) +
@@ -330,7 +356,7 @@ all_df %>%
   anova_test(fecundity ~ pop) 
 
 fec_res <- data.frame(host = c('BALB/c', 'C57BL/6'), pop = 'EG', method = c('K-W', 'ANOVA'),
-                      p = c(0.0291, 0.102))
+                      p = c(0.032, 0.136))
 
 # A tibble: 2 x 7
 #host    .y.           n statistic    df      p method        
@@ -368,10 +394,10 @@ plot_fecundity <-
   ylab("Fecundity (x 1000)") +
   ylim(0, 25) +
   facet_wrap(~host, strip.position = 'bottom') + 
-  geom_vline(data=fec[fec$host=="BALB/c",], aes(xintercept =4.5), linetype="dashed") +
+  geom_vline(data=all_df[all_df$host=="BALB/c",], aes(xintercept =4.5), linetype="dashed") +
   my_theme() +
-  geom_text(data =fec_res, aes(label = paste0(method, ", p = ", round(p,3))), y = 25)  +
-  geom_text(data = fecundity_p, aes(label = str_trim(letter), y = 13)) 
+  geom_text(data =fec_res, aes(label = paste0(method, ", p = ", round(p,3))), y = 20)  +
+  geom_text(data = fecundity_p, aes(label = str_trim(letter), y = 16)) 
   #add_pvalue(p_fecundity, tip.length = 0.01, label = {"p.adj.signif"}, label.size = 5,
    #          step.group.by = 'host', y.position = 13) 
 
@@ -392,7 +418,7 @@ all_df_eggs %>%
 bartlett.test(data = subset(all_df, host == "BALB/c" & pop != "Control"), liver_eggs ~ pop)
 bartlett.test(data = subset(all_df, host == "C57BL/6" & pop != "Control"), liver_eggs ~ pop)
 
-# Perform stats test
+# Perform stats test to compare eggs
 all_df_eggs %>%
   group_by(pop, host) %>%
   wilcox_test(eggs ~ organ) %>%
@@ -414,7 +440,7 @@ all_df_eggs %>%
   
 anova_res <- data.frame(host = c('BALB/c', 'C57BL/6'), 
            method = c('ANOVA', 'ANOVA'),
-           result = c(0.005, 0.018),
+           result = c(0.002, 0.011),
            pop = c('EG', 'EG'))
 
 p_pop <- all_df_eggs %>%
@@ -445,7 +471,7 @@ plot_eggs <-
             y = 33500, color = 'indianred') +
   ylim(0, 34000) +
   my_theme() +
-  geom_text(data = pop_p, aes(label = str_trim(letter), y = 28000),color = 'indianred') +
+  geom_text(data = pop_p, aes(label = str_trim(letter), y = 30000),color = 'indianred') +
   theme(legend.position = 'right') +
   labs(fill = 'Organ',  y = "Eggs per g of tissue")
 
@@ -526,7 +552,7 @@ pdf("Additional file FigureS1.pdf", width = 5, height = 4)
 
 dev.off()
 
-pdf("Additional file 5 FigureS5.pdf", width = 10, height = 4)
+jpeg("Additional file 5 FigureS5.jpg", width = 10, height = 6, unit = 'in', res =300)
 
 (p_liver_cor + p_spleen_cor) + plot_layout(guides = 'collect') & theme(legend.position = 'bottom') &
   plot_annotation(tag_levels = c("A")) &

@@ -1,7 +1,7 @@
 # Figure 4 - CBC 
 # Author: Kathrin Jutzeler
 # Date: May 23, 2023
-# Last updated: September 7, 2023
+# Last updated: March 7, 2024
 
 # Load packages ####
 library(tidyverse)
@@ -49,8 +49,15 @@ CBC_refined <- CBC_all %>%
 parameters <- c('LYMPH#(K/uL)','LYMPH%(%)','RET#(K/uL)', 'RET%(%)', 'NEUT#(K/uL)', 'NEUT%(%)',
                 'MONO#(K/uL)','MONO%(%)', 'EO#(K/uL)', 'EO%(%)', 'HCT(%)', 'BASO#(K/uL)', 'BASO%(%)')
 
+# Normalize by penetration rate
+CBC_refined <- CBC_refined %>% 
+  left_join(dplyr::select(all_df, sample, penrate), by = 'sample')
+
+norm <- CBC_refined %>%
+    mutate_at(vars(parameters), ~ ifelse(pop != 'Control', ./penrate, .))
+
 # Add summary stats for plotting
-CBC_summary <- CBC_refined %>%
+CBC_summary <- norm %>%
   group_by(host, pop, time) %>%
   summarize_at(vars(parameters), c(mean = mean, se = std.error)) %>%
   ungroup()
@@ -59,7 +66,7 @@ CBC_summary <- CBC_refined %>%
 norms_CBC <- CBC_refined %>%
   filter(pop != 'Control') %>%
   group_by(host,pop, time) %>%
-  summarize_at(parameters, list(shapiro = ~shapiro.test(.)$p.value) ) 
+  summarize_at(parameters[c(1:11)], list(shapiro = ~shapiro.test(.)$p.value) ) 
 
 #++++++++++++++++++++++++++++++++++++++
 # Function for Conover and letters ####
@@ -190,10 +197,10 @@ plot_lymph <-
   ylab("Mean lymphocytes (K/uL)") +
   xlab('Weeks post infection') +
   labs(color = "Population") +
-  geom_text(data = f_LYMPH_uni, aes(label = paste0('Friedman p = ', round(p, digits =10)), y =16)) +
+  geom_text(data = f_LYMPH_uni, aes(label = paste0('Friedman p = ', round(p, digits =10)), y =20)) +
   geom_text(data = p_lymph_h1, aes(label = p.adj.signif), vjust = -0.5, y = 4) +
-  geom_text_repel(
-    aes(label = letter, color = pop), show.legend = F, data = stat, position = position_dodge(width = 0.5), hjust = 0.5) +
+  #geom_text_repel(
+   # aes(label = letter, color = pop), show.legend = F, data = stat, position = position_dodge(width = 0.5), hjust = 0.5) +
   scale_color_manual(values = my_color) +
   scale_x_discrete(labels=c("0","2","4","6", "8", "10")) +
   theme_minimal() +
@@ -298,18 +305,17 @@ p_eo_h1 <- CBC_refined %>%
 
 # Plot 
 plot_eo <- 
-  ggplot(CBC_summary, aes(time, `EO#(K/uL)_mean`, group = interaction(pop))) +
-  geom_point(size =1.5, position = position_dodge(width = 0.5), aes(color = pop)) +
-  geom_line(data=subset(CBC_summary, pop != 'Control'),position = position_dodge(width = 0.5), aes(color = pop)) +
-  geom_line(data=subset(CBC_summary, pop == 'Control'),position = position_dodge(width = 0.5), aes(color = pop),
+  ggplot(CBC_summary, aes(time, `EO#(K/uL)_mean`)) +
+  geom_point(size =1.5, aes(color = pop, group = pop), position = position_dodge(width = 0.3)) +
+  geom_line(data=subset(CBC_summary, pop != 'Control'), aes(color = pop, group = pop), position = position_dodge(width = 0.3)) +
+  geom_line(data=subset(CBC_summary, pop == 'Control'), aes(color = pop, group = pop), position = position_dodge(width = 0.3),
             linetype = 'dashed') +
   geom_errorbar(aes(ymin=`EO#(K/uL)_mean`-`EO#(K/uL)_se`, ymax=`EO#(K/uL)_mean`+`EO#(K/uL)_se`, 
-                    color = pop), width=.2,
-                position=position_dodge(0.5)) +
+                    color = pop), width=.2,  position=position_dodge(0.3)) +
   facet_grid(host~., scale ='fixed') +
   geom_segment(data=CBC_all[CBC_all$host=="BALB/c",], aes(x=0, y=0, xend=6.5, yend=0), linetype="dashed",
                color = "black", size=0.5) +
-  geom_text(data = f_EO_uni, aes(label = paste0('Friedman p = ', round(p, digits =10)), y =1.5)) +
+  geom_text(data = f_EO_uni, aes(label = paste0('Friedman p = ', round(p, digits =10)), y =2)) +
   geom_text(data = p_eo_h1, aes(label = p.adj.signif), vjust = -0.5, y = 1.5) +
   ylab("Mean eosinophils (K/uL)") +
   xlab("Weeks post infection") +
@@ -378,15 +384,20 @@ f_MONO_uni <- CBC_summary %>%
 CBC_summary %>%
   filter(pop != 'Control') %>%
   group_by(pop) %>%
-  friedman_test(`NEUT#(K/uL)_mean` ~ host | time) %>%
+  friedman_test(`MONO#(K/uL)_mean` ~ host | time) %>%
   p_round(p, 3)
 
 # Artificial value for plotting
 f_MONO_uni$pop <- c(1, 2)
 f_MONO_uni$time <- c(2,2)
 
-mono_w <- f_conover('MONO%(%)_mean', 'BALB/c')
-mono_b <- f_conover('MONO%(%)_mean', 'C57BL/6')
+df <- subset(CBC_summary, pop != 'Control' & host == 'C57BL/6') %>% droplevels()
+
+PMCMRplus::frdAllPairsConoverTest(y = df$`MONO#(K/uL)_mean`, groups = df$pop, 
+                                  blocks = df$time, p.adjust.method = "BH")
+
+mono_w <- f_conover("MONO#(K/uL)_mean", 'BALB/c')
+mono_b <- f_conover("MONO#(K/uL)_mean", 'C57BL/6')
 
 mono <- bind_rows(mono_w, mono_b)
 
@@ -407,18 +418,20 @@ p_mono_h1 <- CBC_refined %>%
 # Plot
 plot_mono <- 
   ggplot(CBC_summary, aes(time, `MONO#(K/uL)_mean`, group = interaction(pop))) +
-  geom_point(size =1.5, position = position_dodge(width = 0.5), aes(color = pop)) +
-  geom_line(data=subset(CBC_summary, pop != 'Control'),position = position_dodge(width = 0.5), aes(color = pop)) +
-  geom_line(data=subset(CBC_summary, pop == 'Control'),position = position_dodge(width = 0.5), aes(color = pop),
+  geom_point(size =1.5, position = position_dodge(width = 0.3), aes(color = pop)) +
+  geom_line(data=subset(CBC_summary, pop != 'Control'),position = position_dodge(width = 0.3), aes(color = pop)) +
+  geom_line(data=subset(CBC_summary, pop == 'Control'),position = position_dodge(width = 0.3), aes(color = pop),
             linetype = 'dashed') +
   geom_errorbar(aes(ymin=`MONO#(K/uL)_mean`-`MONO#(K/uL)_se`, ymax=`MONO#(K/uL)_mean`+`MONO#(K/uL)_se`, 
                     color = pop), width=.2,
-                position=position_dodge(0.5)) +
+                position=position_dodge(0.3)) +
   facet_grid(host~., scale ='fixed') +
   geom_segment(data=CBC_all[CBC_all$host=="BALB/c",], aes(x=0, y=0, xend=6.5, yend=0), linetype="dashed",
                color = "black", size=0.5) +
   geom_text(data = f_MONO_uni, aes(label = paste0('Friedman p = ', round(p, digits =10)), y =2)) +
   geom_text(data = p_mono_h1, aes(label = p.adj.signif), vjust = -0.5, y = 1.5) +
+  geom_text_repel(
+    aes(label = letter, color = pop), show.legend = F, data = stat_mono, position = position_dodge(width = 0.3), hjust = 0.5) +
   ylab("Mean monocytes (K/uL)") +
   xlab('Weeks post infection') +
   labs(color = "Population") +
@@ -480,7 +493,7 @@ ret_b <- f_conover('RET#(K/uL)_mean', 'C57BL/6')
 ret <- bind_rows(ret_w, ret_b)
 
 stat_ret<- CBC_summary %>%
-  filter(time == 'Week 10') %>%
+  filter(pop != 'Control', time == 'Week 10') %>%
   bind_cols(ret)
 
 
@@ -496,9 +509,9 @@ p_ret_h1 <- CBC_refined %>%
 # Plot
 plot_ret <- 
   ggplot(CBC_summary, aes(time, `RET#(K/uL)_mean`, group = interaction(pop))) +
-  geom_point(size =1.5, position = position_dodge(width = 0.5), aes(color = pop)) +
-  geom_line(data=subset(CBC_summary, pop != 'Control'),position = position_dodge(width = 0.5), aes(color = pop)) +
-  geom_line(data=subset(CBC_summary, pop == 'Control'),position = position_dodge(width = 0.5), aes(color = pop),
+  geom_point(size =1.5, position = position_dodge(width = 0.3), aes(color = pop)) +
+  geom_line(data=subset(CBC_summary, pop != 'Control'),position = position_dodge(width = 0.3), aes(color = pop)) +
+  geom_line(data=subset(CBC_summary, pop == 'Control'),position = position_dodge(width = 0.3), aes(color = pop),
             linetype = 'dashed') +
   geom_errorbar(aes(ymin=`RET#(K/uL)_mean`-`RET#(K/uL)_se`, ymax=`RET#(K/uL)_mean`+`RET#(K/uL)_se`, 
                     color = pop), width=.2,
@@ -506,8 +519,10 @@ plot_ret <-
   facet_grid(host~., scale ='fixed') +
   geom_segment(data=CBC_all[CBC_all$host=="BALB/c",], aes(x=0, y=0, xend=6.5, yend=0), linetype="dashed",
                color = "black", size=0.5) +
-  geom_text(data = f_RET_uni, aes(label = paste0('Friedman p = ', round(p, digits =10)), y =1500)) +
-  ylab("Mean reticulocytes (K/uL)") +
+  geom_text(data = f_RET_uni, aes(label = paste0('Friedman p = ',  format(round(p, digits =3),nsmall =3)), y =1500)) +
+  geom_text_repel(
+    aes(label = letter, color = pop), show.legend = F, data = stat_ret, position = position_dodge(width = 0.5), hjust = 0.5) +
+    ylab("Mean reticulocytes (K/uL)") +
   xlab('Weeks post infection') +
   labs(color = "Population") +
   scale_color_manual(values = my_color) +
@@ -527,6 +542,15 @@ f_HCT <- CBC_summary %>%
 # Artificial value for plotting
 f_HCT$pop <- c(1, 2)
 f_HCT$time <- c(2,2)
+
+HCT_b <- f_conover("HCT(%)_mean", "C57BL/6")
+HCT_w <- f_conover("HCT(%)_mean", "BALB/c")
+
+HCT <- bind_rows(HCT_w, HCT_b)
+
+stat_HCT <- CBC_summary %>%
+  filter(time == 'Week 10', pop != 'Control') %>%
+  bind_cols(HCT)
 
 # Between hosts 
 p_HCT_h1 <- CBC_refined %>%
@@ -549,8 +573,11 @@ plot_HCT <-
   facet_grid(host~., scale ='fixed') +
   geom_segment(data=CBC_all[CBC_all$host=="BALB/c",], aes(x=0, y=0, xend=6.5, yend=0), linetype="dashed",
                color = "black", linewidth=0.5) +
-  geom_text(data = f_HCT, aes(label = paste0('Friedman p = ', round(p, digits =10)), y =10)) +
+  geom_text(data = subset(f_HCT, host == 'C57BL/6'), aes(label = paste0('Friedman p = ', round(p, digits =3)), y =10)) +
+  geom_text(data = subset(f_HCT, host == 'BALB/c'), aes(label = paste0('Friedman p < 0.001'), y =10)) +
   geom_text(data = p_HCT_h1, aes(label = p.adj.signif), vjust = -0.5, y = 20) +
+  geom_text_repel(
+    aes(label = letter, color = pop), show.legend = F, data = stat_HCT, position = position_dodge(width = 0.5), hjust = 0.5) +
   ylab("Mean HCT (%)") +
   xlab('Weeks post infection') +
   labs(color = "Population") +
@@ -572,6 +599,15 @@ f_NEUT_uni <- CBC_summary %>%
 # Artificial value for plotting
 f_NEUT_uni$pop <- c(1, 2)
 f_NEUT_uni$time <- c(2,2)
+
+neut_w <- f_conover("NEUT#(K/uL)_mean", 'BALB/c')
+neut_b <- f_conover("NEUT#(K/uL)_mean", 'C57BL/6')
+
+neut <- bind_rows(neut_w, neut_b)
+
+stat_neut <- CBC_summary %>%
+  filter(time == 'Week 10', pop != 'Control') %>%
+  bind_cols(neut)
 
 
 # Between hosts 
@@ -616,7 +652,6 @@ f_BASO_uni <- CBC_summary %>%
   friedman_test(`BASO#(K/uL)_mean` ~ pop | time) %>%
   p_round(p, 3)
 
-
 # Artificial value for plotting
 f_BASO_uni$pop <- c(1, 2)
 f_BASO_uni$time <- c(2,2)
@@ -624,6 +659,7 @@ f_BASO_uni$time <- c(2,2)
 temp <- CBC_summary %>% filter(host == 'C57BL/6')
 
 baso_b <- f_conover("BASO#(K/uL)_mean", "C57BL/6")
+baso_w <- f_conover("BASO#(K/uL)_mean", "BALB/c")
 
 baso_b
 
@@ -654,10 +690,8 @@ plot_baso <-
   facet_grid(host~., scale ='fixed') +
   geom_segment(data=CBC_all[CBC_all$host=="BALB/c",], aes(x=0, y=0, xend=6.5, yend=0), linetype="dashed",
                color = "black", size=0.5) +
-  geom_text(data = f_BASO_uni, aes(label = paste0('Friedman p = ', round(p, digits =10)), y = 0.03)) +
+  geom_text(data = f_BASO_uni, aes(label = paste0('Friedman p = ', round(p, digits =10)), y = 0.04)) +
   geom_text(data = p_baso_h1, aes(label = p.adj.signif), vjust = -0.5, y = 0.025) +
-  geom_text_repel(
-    aes(label = letter, color = pop), show.legend = F, data = stat, position = position_dodge(width = 0.5), hjust = 0.5) +
   ylab("Mean basophils (K/uL)") +
   xlab('Weeks post infection') +
   labs(color = "Population") +
@@ -669,7 +703,7 @@ plot_baso <-
 # EXPORT PLOTS ####
 #++++++++++++++++++
 # 4 panels
-pdf("Figure4.pdf", width = 10, height = 8)
+jpeg("Figure4.jpg", width = 10, height = 8, unit = 'in' , res=300)
 
 ((plot_eo | plot_baso) & theme(axis.title.x = element_blank())) / 
   ((plot_lymph | plot_mono)  + plot_layout(guides = 'collect') & theme(legend.position = 'bottom')) + plot_annotation(tag_levels = c("A")) &
@@ -678,7 +712,7 @@ pdf("Figure4.pdf", width = 10, height = 8)
 dev.off()
 
 # Supplemental
-pdf("Additional file FigureS3.pdf", width = 10, height = 8)
+jpeg("Additional file FigureS3.jpg", width = 10, height = 8, unit = 'in', res=300)
 
 ((plot_neut | plot_HCT)) / 
   ((plot_ret + plot_spacer())  + plot_layout(guides = 'collect') & theme(legend.position = 'bottom')) + plot_annotation(tag_levels = c("A")) &

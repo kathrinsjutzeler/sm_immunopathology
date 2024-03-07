@@ -1,7 +1,7 @@
 # Figure 6 - Effect size
 # Author: Kathrin Jutzeler
 # Date: May 26, 2023
-# Last updated: September 6, 2023
+# Last updated: March 7, 2024
 
 # Load packages
 library(tidyverse) # for everything
@@ -39,7 +39,15 @@ em_full <- all_df %>%
   dplyr::select(total_worms, intestine_eggs, liver_eggs, fecundity, liver_wt_norm, spleen_wt_norm, intestine_length,
                 gain, fibrosis, granuloma,
                 4:8, # CBC data
-                IFNy, TNFa, IL2, IL4, IL5, IL6, IL10, IL13)
+                IFNy, TNFa, IL2, IL4, IL5, IL6, IL10, IL13,
+                penrate)
+
+# Normalize by penetration rate
+norm <- em_full %>%
+  mutate_at(vars(1:23), ~./penrate)
+
+em_full <- norm[1:23]
+
 
 # Perform normality test
 test <- em_full %>%
@@ -86,11 +94,14 @@ output <-
 
 output <- bind_cols(output, pvalues)
 
+output$Eta2_partial <- round(output$Eta2_partial,3)
+
 output <- output %>%
-  mutate(significant = ifelse(pvalue <= 0.05 & pvalue > 0.01, paste0(round(Eta2_partial,3),"*"),
-                              ifelse(pvalue <= 0.01 & pvalue > 0.001, paste0(round(Eta2_partial,3), "**"),
-                                     ifelse(pvalue <= 0.001, paste0(round(Eta2_partial, 3),"***"), 
-                                            round(Eta2_partial, 3)))))
+  mutate(significant = ifelse(pvalue <= 0.05 & pvalue > 0.01, paste0(sprintf("%.3f",Eta2_partial),"*"),
+                              ifelse(pvalue <= 0.01 & pvalue > 0.001, paste0(sprintf("%.3f",Eta2_partial), "**"),
+                                     ifelse(pvalue <= 0.001, paste0(sprintf("%.3f",Eta2_partial),"***"), 
+                                            sprintf("%.3f", Eta2_partial)))))
+
 #mtest <- car::Anova(model)
 #effectsize::eta_squared(mtest)
 
@@ -108,7 +119,7 @@ mat_label <- as.matrix(output_signif)
 rownames(mat_label) <- mat_label[,1]
 mat_label <- mat_label[,-1]
 
-# This is for the acutal heatmap
+# This is for the actual heatmap
 output_eta <- output %>% 
   dplyr::select(1:3) %>%
   pivot_wider(
@@ -139,8 +150,8 @@ cellheight = 30, angle_col = 45))
 fig_6_int <- as.ggplot(((p_bypheno_int) ) + plot_layout(widths = c(4, 0.5, 4)) +
                          plot_annotation(tag_levels = c("A")) &  theme(plot.tag = element_text(face = 'bold', size = 16)))
 
-ggsave('Figure6_int.jpg', fig_6_int, width =10, height = 12)
+#ggsave('Figure6_int.jpg', fig_6_int, width =10, height = 12)
 
-png('Fig6.png', width = 5, height = 11, unit = 'in', res =300)
+jpeg('Figure6.jpg', width = 5, height = 11, unit = 'in', res =300)
 p_bypheno_int2
 dev.off()

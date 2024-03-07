@@ -1,7 +1,7 @@
 # Figure 5 - Cytokines 
 # Author: Kathrin Jutzeler
 # Date: May 23, 2023
-# Last updated
+# Last updated: March 7, 2024
 
 # Load packages ####
 library(tidyverse)
@@ -34,6 +34,12 @@ all_df <- read_csv('all_data.csv')
 
 all_df$pop <- factor(all_df$pop, levels = c('Control', 'BRE', 'EG', 'LE', 'OR'),
                           labels = c('Ctrl', 'BRE', 'EG', 'LE', 'OR'))
+
+cytokine_col <- c("IFNy", "IL5",  "TNFa", "IL2",  "IL6",  "IL4",  "IL10", "IL13")
+
+# Normalize by penetration rate
+all_df <- all_df %>%
+  mutate_at(vars(cytokine_col), ~ ifelse(pop != 'Ctrl', ./penrate, .))
 
 # Perform normality tests 
 norms <- all_df %>%
@@ -124,20 +130,26 @@ IFN_host <- all_df %>%
 # Plot
 plot_IFN <- f_plot(IFNy) +
   ylab("IFN\u03B3 (pg/ml)") +
-  geom_text(data = stat_IFN, aes(label = paste0(method, ', p = ',p)), y = 42000) +
+  geom_text(data = stat_IFN, aes(label = paste0(method, ', p = ',format(p, nsmall =3))), y = 47000) +
   geom_text(data = IFN_host, aes(label = p.adj.signif), vjust = -0.5, y = 7000)
 
 #+++++++++++++++++
 # Plot IL-2 ####
 #+++++++++++++++++
 # Perform stats
-stat_IL2 <- cytokine_df %>%
+stat_IL2 <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
   kruskal_test(IL2 ~ pop) %>%
   mutate(pop = 'EG', method = 'K-W')
 
-IL2_host <- cytokine_df %>%
+IL2_dunn <- all_df %>%
+  filter(pop != 'Ctrl') %>%
+  group_by(host) %>%
+  dunn_test(IL2 ~ pop) %>%
+  mutate(pop = rep(c('BRE', 'EG', 'LE', 'OR'),3))
+
+IL2_host <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(pop) %>%
   wilcox_test(IL2 ~ host) %>%
@@ -149,19 +161,19 @@ IL2_host <- cytokine_df %>%
 # Plot
 plot_IL2 <- f_plot(IL2) +
   geom_text(data = stat_IL2, aes(label = paste0(method, ', p = ',round(p, 3))), y = 370) +
-  geom_text(data = IL2_host, aes(label = p.adj.signif), vjust = -0.5, y = 300)
+  geom_text(data = subset(IL2_dunn, host == 'BALB/c'), aes(label = p.adj.signif), vjust = -0.5, y = 300)
 
 #+++++++++++++++++
 # Plot IL-4 ####
 #+++++++++++++++++
 # Perform stats
-stat_IL4 <- cytokine_df %>%
+stat_IL4 <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>% 
   kruskal_test(IL4 ~ pop) %>%
   mutate(pop = 'EG', method = 'K-W')
 
-IL4_host <- cytokine_df %>%
+IL4_host <- all_df %>%
   group_by(pop) %>% 
   #ungroup() %>%
   filter(pop != 'Ctrl') %>%
@@ -173,7 +185,7 @@ IL4_host <- cytokine_df %>%
 
 # Plot
 plot_IL4 <- f_plot(IL4) +
-  geom_text(data = stat_IL4, aes(label = paste0(method, ', p = ',p)), y = 17000) +
+  geom_text(data = stat_IL4, aes(label = paste0(method, ', p = ',format(p,nsmall =3))), y = 20000) +
   geom_text(data = IL4_host, aes(label = p.adj.signif), vjust = -0.5, y = 7000)
 
 #+++++++++++++++
@@ -181,13 +193,13 @@ plot_IL4 <- f_plot(IL4) +
 #+++++++++++++++
 
 # Perform stats
-stat_IL5 <- cytokine_df %>%
+stat_IL5 <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
   kruskal_test(IL5 ~ pop) %>%
   mutate(pop = 'EG', method = 'K-W')
 
-IL5_host <- cytokine_df %>%
+IL5_host <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(pop) %>%
   wilcox_test(IL5 ~ host) %>%
@@ -199,7 +211,8 @@ IL5_host <- cytokine_df %>%
 
 # Plot
 plot_IL5 <- f_plot(IL5) +
-  geom_text(data = stat_IL5, aes(label = paste0(method, ', p = ',format(round(p,3)), 1)), y = 2100) +
+  ylim(0,3000) +
+  geom_text(data = stat_IL5, aes(label = paste0(method, ', p = ',round(p,3))), y = 3000) +
   geom_text(data = subset(IL5_host, pop != 'LE'), aes(label = p.adj.signif), vjust = -0.5, y = 1400) +
   geom_text(data = subset(IL5_host, pop == 'LE'), aes(label = p.adj), vjust = -0.5, y = 1400) 
 
@@ -207,13 +220,13 @@ plot_IL5 <- f_plot(IL5) +
 # Plot IL6 ####
 #++++++++++++++
 # Perform stats
-stat_IL6 <- cytokine_df %>%
+stat_IL6 <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
   kruskal_test(IL6 ~ pop) %>%
   mutate(pop = 'EG', method = 'K-W')
 
-IL6_host <- cytokine_df %>%
+IL6_host <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(pop) %>%
   wilcox_test(IL6 ~ host) %>%
@@ -226,7 +239,7 @@ IL6_host <- cytokine_df %>%
 # Plot
 plot_IL6 <- f_plot(IL6) +
   geom_text(data = stat_IL6, aes(label = paste0(method, ', p = ',format(p, 1))), y = 120000) +
-  geom_text(data = subset(IL6_host, pop %in% c('EG', 'OR')), aes(label = p.adj), vjust = -0.5, y = 20000) +
+  geom_text(data = subset(IL6_host, pop %in% c('EG', 'OR')), aes(label = p.adj.signif), vjust = -0.5, y = 20000) +
   geom_text(data = subset(IL6_host, !pop %in% c('EG', 'OR')), aes(label = p.adj.signif), vjust = -0.5, y = 20000)
 
 #+++++++++++++++++
@@ -234,13 +247,13 @@ plot_IL6 <- f_plot(IL6) +
 #+++++++++++++++++
 
 # Perform stats
-stat_IL10 <- cytokine_df %>%
+stat_IL10 <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
   kruskal_test(IL10 ~ pop) %>%
   mutate(pop = 'EG', method = 'K-W')
 
-IL10_host <- cytokine_df %>%
+IL10_host <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(pop) %>%
   wilcox_test(IL10 ~ host) %>%
@@ -259,13 +272,13 @@ plot_IL10 <- f_plot(IL10) +
 #+++++++++++++++
 
 # Perform stats
-stat_IL13 <- cytokine_df %>%
+stat_IL13 <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
   kruskal_test(IL13 ~ pop) %>%
   mutate(pop = 'EG', method = 'K-W')
 
-IL13_host <- cytokine_df %>%
+IL13_host <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(pop) %>%
   wilcox_test(IL13 ~ host) %>%
@@ -285,13 +298,13 @@ plot_IL13 <- f_plot(IL13) +
 #+++++++++++++++++
 
 # Perform stats
-stat_TNFa <- cytokine_df %>%
+stat_TNFa <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
   kruskal_test(TNFa ~ pop) %>%
   mutate(pop = 'EG', method = 'K-W')
 
-TNFa_host <- cytokine_df %>%
+TNFa_host <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(pop) %>%
   wilcox_test(TNFa ~ host) %>%
@@ -304,14 +317,14 @@ TNFa_host <- cytokine_df %>%
 # Plot
 plot_TNFa <- f_plot(TNFa) +
   ylab("TNF\u03B1 (pg/ml)") +
-  geom_text(data = stat_TNFa, aes(label = paste0(method, ', p = ',format(p,1))), y = 19000) +
+  geom_text(data = stat_TNFa, aes(label = paste0(method, ', p = ',format(p,1))), y = 20500) +
   geom_text(data = TNFa_host, aes(label = p.adj.signif), vjust = -0.5, y = 7000) 
 
 #++++++++++++++++++++++
 # EXPORT PLOTS ####
 #++++++++++++++++++++++
 
-png("Figure5.png", width = 10, height = 12, unit = 'in', res =300)
+jpeg("Figure5.jpg", width = 10, height = 12, unit = 'in', res =300)
 
 (plot_IFN + plot_TNFa) / (plot_IL4 | plot_IL5) / (plot_IL6 | plot_spacer())  +
  plot_annotation(tag_levels = c("A")) &  theme(plot.tag = element_text(face = 'bold'), axis.title.x = element_blank())
@@ -319,7 +332,7 @@ png("Figure5.png", width = 10, height = 12, unit = 'in', res =300)
 dev.off()
 
 
-pdf("Additional file FigureS4.pdf", width = 10, height = 8)
+jpeg("Additional file FigureS4.jpg", width = 10, height = 8, unit = 'in', res =300)
 
 (plot_IL2 + plot_IL10) / (plot_IL13 | plot_spacer()) +
   plot_annotation(tag_levels = c("A")) &  theme(plot.tag = element_text(face = 'bold'), axis.title.x = element_blank())

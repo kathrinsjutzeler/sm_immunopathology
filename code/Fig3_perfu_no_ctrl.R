@@ -1,7 +1,7 @@
 # Figure 3 - Tissue and histology data
 # Author: Kathrin Jutzeler
 # Date: May 16, 2023
-# Last updated: October 19, 2023
+# Last updated: March 7, 2024
 # R version 4.2.0, tidyverse version 1.3.2, ggplot2 3.3.6      ✔ purrr   0.3.4 
 #✔ tibble  3.1.8      ✔ dplyr   1.0.10
 #✔ tidyr   1.2.0      ✔ stringr 1.4.1 
@@ -65,6 +65,11 @@ all_df <- read_csv('all_data.csv')
 all_df$pop <- factor(all_df$pop, levels = c('Control', 'BRE', 'EG', 'LE', 'OR'), 
                     labels = c('Ctrl', 'BRE', 'EG', 'LE', 'OR'))
 
+#Normalize by penetration rate
+all_df <- all_df %>%
+  mutate(across(c(-penrate, -host, -pop, -sample), ~ ./penrate))
+
+
 #+++++++++++++++++++++++++++
 # Function for letters ####
 #+++++++++++++++++++++++++++
@@ -95,6 +100,14 @@ f_letters <- function(output, mouse) {
 #++++++++++++++++++++++
 # BODY WEIGHT  ####
 #++++++++++++++++++++++
+# Normalize weight by penrate
+weight <- weight %>% 
+  left_join(dplyr::select(all_df, sample, penrate), by = c('animal_ID' = 'sample'))
+
+weight <- weight %>% 
+  mutate(weight = ifelse(pop == 'Control', weight, weight/penrate),
+         gain = ifelse(pop == 'Control', gain, gain/penrate))
+
 # Perform normality tests
 weight %>%
   filter(time != 0) %>%
@@ -104,10 +117,9 @@ weight %>%
 
 # Calculate mean and se per group
 weight_summary <- weight %>%
-  na.omit() %>%
   group_by(host, pop, time) %>%
-  summarize(mean_weight = mean(weight), se = std.error(weight), 
-            mean_gain = mean(gain), se_gain = std.error(gain))
+  summarize(mean_weight = mean(weight, na.rm = T), se = std.error(weight, na.rm = T), 
+            mean_gain = mean(gain, na.rm  =T), se_gain = std.error(gain, na.rm =T))
 
 ##### This is the final plot #####
 # Repeated measures 
@@ -146,7 +158,7 @@ df <-  data.frame(letter= c(' ', w$`res$Letters`)) #,' ', b$`res$Letters`))
 
 stat <- weight_summary %>%
   filter(host == 'BALB/c', time == 12) %>%
-  bind_cols( df)
+  bind_cols(df)
 
 # Weight gain
 plot_weight <- 
@@ -164,13 +176,36 @@ plot_weight <-
   labs(color = "Population") + 
   scale_color_manual(values = my_color) +
   my_theme() +
-  geom_text(data = fgain, aes(label = paste0('Friedman p = ', format(round(p, 3),3)), x = 4, y =25)) +
+  geom_text(data = subset(fgain, host == 'C57BL/6'), aes(label = paste0('Friedman p = ', format(round(p, 3),3)), x = 4, y =30)) +
+  geom_text(data = subset(fgain, host == 'BALB/c'), aes(label = paste0('Friedman p < 0.001'), x = 4, y =30)) +
   geom_text_repel(
     aes(label = letter, color = pop), data = stat, position = position_dodge(width = 0.5), hjust = 0.5,
     show.legend = F) +
   geom_vline(data=weight_summary[weight_summary$host=="BALB/c",], aes(xintercept=13.6), 
              linetype = 'solid')+
   theme(legend.position = 'top', axis.title.x = element_text()) 
+
+# Between hosts 
+weight %>%
+  filter(time == "12") %>%
+  group_by( pop) %>% 
+  wilcox_test(gain ~ host) %>%
+  adjust_pvalue(method ="BH") %>%
+  filter(p.adj <= 0.05)
+
+# Dead mice only 
+ggplot(subset(weight, animal_ID %in% c('2D', '4D', '4E', '10E', '10F')), 
+       aes(time,gain, group = interaction(animal_ID))) +
+  geom_point(size =1.5, position = position_dodge(width = 0.5), aes(color = pop)) +
+  geom_line(position = position_dodge(width = 0.5), aes(color = pop)) +
+  ylab("Weight gain (%)") +
+  xlab("Weeks post infection") +
+  labs(color = "Population") + 
+  scale_color_manual(values = my_color) +
+  my_theme() +
+  theme(legend.position = 'top', axis.title.x = element_text()) 
+
+#ggsave('dead_mice.png', width = 8, height = 6, dpi =300)
 
 #++++++++++++++++++++++
 # LIVER WEIGHT ####
@@ -195,7 +230,7 @@ all_df %>%
   group_by(host) %>%
   kruskal_test(liver_wt_norm ~ pop)
 
-liver_res <- data.frame(host = c('BALB/c', 'C57BL/6'), test = c('ANOVA', 'K-W'), p = c(0.003, 0.021),
+liver_res <- data.frame(host = c('BALB/c', 'C57BL/6'), test = c('ANOVA', 'K-W'), p = c(0.001, 0.013),
                         pop = 'EG')
 
 p_liver <- all_df %>%
@@ -232,7 +267,7 @@ p_liver_h <- all_df %>%
 y_B <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host, pop) %>%
-  summarize(max = max(liver_wt_norm)+0.5)
+  summarize(max = max(liver_wt_norm)+1.0)
 
 plot_liver <- 
   ggplot(all_df, aes(pop, liver_wt_norm)) +
@@ -241,10 +276,10 @@ plot_liver <-
   geom_vline(data=all_df[all_df$host=="BALB/c",], aes(xintercept=5.5), linetype="solid") +
   geom_vline(xintercept = 1.5, linetype = 'dashed') +
   scale_fill_manual(values = my_color) +
-  ylim(0, 15) +
+  ylim(0, 16) +
   geom_text(data = liver_p, aes(label = str_trim(letter), y = y_B$max)) +
-  geom_text(data = p_liver_h, aes(label = p.signif), vjust = -0.5, y = 8) +
-  geom_text(data = liver_res, aes(label = paste0(test, ', p = ',p)), y = 15) +
+  geom_text(data = p_liver_h, aes(label = p.signif), vjust = -0.5, y = 13) +
+  geom_text(data = liver_res, aes(label = paste0(test, ', p = ',p)), y = 16) +
   ylab("Liver weight (% BW)") +
   my_theme() 
   
@@ -263,27 +298,36 @@ all_df %>%
   group_by(host, pop) %>%
   shapiro_test(spleen_wt_norm)
 
-bartlett.test(data = subset(all_df, host == "BALB/c" & pop != 'Ctrl' ), spleen_wt_norm ~ pop)
-#p-value = 0.04872
+# Use ANOVA for C57BL/6, K-W for BALB/c
 bartlett.test(data = subset(all_df, host == "C57BL/6" & pop != 'Ctrl'), spleen_wt_norm ~ pop)
-#p-value = 0.04588
+#p-value = 0.0902
 
-# Use ANOVA for both
-# Perform stats test
-spleen_res <- all_df %>%
+# Perform stats tests
+all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
   anova_test(spleen_wt_norm ~ pop)
 
-spleen_res$pop <- 'EG'
+all_df %>%
+  filter(pop != 'Ctrl') %>%
+  group_by(host) %>%
+  kruskal_test(spleen_wt_norm ~ pop)
 
-p_spleen <- all_df %>%
+spleen_res <- data.frame(host = c('BALB/c', 'C57BL/6'), test = c('K-W', 'ANOVA'), p = c(0.044, 0.008),
+                        pop = 'EG')
+
+p_spleen1 <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
   tukey_hsd(spleen_wt_norm ~ pop, p.adjust.method = 'BH')
 
-spleen_p1 <- f_letters(p_spleen, 'BALB/c')
-spleen_p2 <- f_letters(p_spleen, 'C57BL/6')
+p_spleen2 <- all_df %>%
+  filter(pop != 'Ctrl') %>%
+  group_by(host) %>%
+  dunn_test(spleen_wt_norm ~ pop, p.adjust.method = 'BH')
+
+spleen_p1 <- f_letters(p_spleen2, 'BALB/c')
+spleen_p2 <- f_letters(p_spleen1, 'C57BL/6')
 
 spleen_p <- bind_rows(spleen_p1, spleen_p2)
 
@@ -305,11 +349,11 @@ plot_spleen <-
   geom_boxplot(aes(fill = pop)) +
   scale_fill_manual(values = my_color) +
   ylab("Spleen weight (% BW)") +
-  ylim(0, 6.5) +
+  ylim(0, 7) +
   facet_wrap(~host, strip.position = 'bottom') + 
   geom_vline(data=all_df[all_df$host=="BALB/c",], aes(xintercept =5.5)) +
   geom_vline(xintercept = 1.5, linetype="dashed") +
-  geom_text(data = spleen_res, aes(label = paste0('ANOVA', ', p = ',p)), y = 6.4) +
+  geom_text(data = spleen_res, aes(label = paste0(test, ', p = ',p)), y = 7) +
   geom_text(data = spleen_p, aes(label = str_trim(letter), y = y_C$max)) +
   my_theme() 
 
@@ -322,23 +366,22 @@ plot_spleen <-
 #++++++++++++++++++++++
 #### Intestine length ####
 #++++++++++++++++++++++
+# Normalize by penetratoin rate
+all_df <- all_df %>%
+  mutate(intestine_length = ifelse(pop == 'Ctrl', intestine_length, intestine_length/penrate))
+
 # Perform normality tests 
 all_df %>%
   group_by(host, pop) %>%
   shapiro_test(intestine_length)
 
-bartlett.test(data = subset(all_df, host == "BALB/c" & pop != 'Ctrl'), intestine_length ~ pop)
-#p-value = 0.3103
-bartlett.test(data = subset(all_df, host == "C57BL/6" & pop != 'Ctrl'), intestine_length ~ pop)
-#p-value = 0.06166
-
-# ANOVA for both
+# Kruskal for both
 
 # Perform stats test
 intestine_res <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
-  anova_test(intestine_length ~ pop)
+  kruskal_test(intestine_length ~ pop)
 
 # Artificial value for plotting
 intestine_res$pop <- 'EG'
@@ -357,7 +400,7 @@ intestine_res$sig<- 'ns'
 p_intestine_h <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(pop) %>%
-  t_test(intestine_length ~ host) %>%
+  wilcox_test(intestine_length ~ host) %>%
   adjust_pvalue(method = 'BH') %>%
   add_significance(symbols = c('####', '###', '##', '#', 'ns')) %>%
   filter(p.adj <= 0.05) %>%
@@ -378,22 +421,24 @@ plot_S1 <-
   facet_wrap(~host, strip.position = 'bottom') + 
   geom_vline(data=all_df[all_df$host=="BALB/c",], aes(xintercept=5.5), linetype="solid") +
   geom_vline(aes(xintercept = 1.5), linetype="dashed") +
-  geom_text(data = intestine_res, aes(label = paste0('ANOVA = ', format(p, 1)), y= 550)) +
+  geom_text(data = intestine_res, aes(label = paste0('K-W = ', format(round(p,3), nsmall =3)), y= 800)) +
   geom_text(data = p_intestine_h, aes(label = p.adj.signif), vjust = -0.5, y = 500) +
   my_theme() 
 
-#++++++++++++++++++
+ggsave('intestine_length.png', width = 8, height = 6, dpi = 300)
+
+#++++++++++++++++
 # FIBROSIS #####
-#++++++++++++++++++
+#++++++++++++++++
 # Perform normality tests
 all_df %>%
   group_by(host, pop) %>%
   shapiro_test(fibrosis)
 
+bartlett.test(data = subset(all_df, host == 'C57BL/6' & pop != 'Ctrl'), fibrosis ~ pop)
 bartlett.test(data = subset(all_df, host == 'BALB/c' & pop != 'Ctrl'), fibrosis ~ pop)
-#0.3517
 
-# ANOVA for BALB/c, KW for C57BL/6
+# ANOVA for both
 
 # Perform stats test
 all_df %>%
@@ -401,14 +446,14 @@ all_df %>%
   group_by(host) %>%
   anova_test(fibrosis ~ pop) 
 
-anova_fibrosis <- data.frame(method = 'ANOVA', host = 'BALB/c', p = 0.073, pop = 'EG')
+anova_fibrosis <- data.frame(method = c('ANOVA', 'ANOVA'), host = c('BALB/c', 'C57BL/6'), p = c(0.129, 0.027), pop = c('EG', 'EG'))
 
-kw_fibrosis <- all_df %>%
+p_fibrosis <- all_df %>%
   filter(pop != 'Ctrl') %>%
   group_by(host) %>%
-  kruskal_test(fibrosis ~ pop) %>%
-  filter(host == 'C57BL/6') %>%
-  mutate(pop = 'EG', method = 'K-W')
+  tukey_hsd(fibrosis ~ pop, p.adjust.method = 'BH')
+
+fibrosis_p <- f_letters(p_fibrosis, 'C57BL/6')
 
 # Perform host comparisons
 
@@ -426,12 +471,12 @@ plot_fibrosis <-
   geom_boxplot(aes(fill = pop)) +
   facet_wrap(~host, strip.position = 'bottom') +
   ylab("Fibrotic area (%)") +
-  ylim(0, 60)+
-  geom_vline(data=stain_1[stain_1$host=="BALB/c",], aes(xintercept =5.5)) +
+  ylim(0, 70)+
+  geom_vline(data=all_df[all_df$host=="BALB/c",], aes(xintercept =5.5)) +
   geom_vline(xintercept =1.5, linetype="dashed") +
-  geom_text(data = kw_fibrosis, aes(label = paste0(method, ', p = ', format(round(p,3)),1), y = 60)) +
-  geom_text(data = anova_fibrosis, aes(label = paste0(method, ', p = ',p), y = 60)) +
+  geom_text(data = anova_fibrosis, aes(label = paste0(method, ', p = ',p), y = 70)) +
   geom_text(data = p_fibrosis_h, aes(label = p.signif), vjust = -0.5, y = 4) +
+  geom_text(data = fibrosis_p, aes(label = str_trim(letter), y = 60)) +
   scale_fill_manual(values = my_color) +
   my_theme()
   
@@ -455,6 +500,13 @@ df_granulomas %>%
 #  sample_n(80) %>%
 #  ungroup()
 
+# Normalizae 
+df_granulomas <- df_granulomas %>%
+  left_join(dplyr::select(all_df, sample, penrate), by = c('Sample' = 'sample'))
+
+df_granulomas <- df_granulomas %>%
+  mutate(area = area /penrate)
+
 # Perform normality tests
 df_granulomas %>%
   group_by(host, pop) %>%
@@ -467,18 +519,15 @@ kw_granuloma <- df_granulomas %>%
   kruskal_test(area ~ pop) %>%
   mutate(pop = 'EG',  method = 'K-W')
 
-# A tibble: 2 × 7
-#host    .y.       n statistic    df       p method        
-#* <chr>   <chr> <int>     <dbl> <int>   <dbl> <chr>         
-# 1 BALB/c  area    513      4.88     3 0.181   Kruskal-Wallis
-#2 C57BL/6 area    523     16.2      3 0.00105 Kruskal-Wallis
-
 p_gran <- df_granulomas %>%
   group_by(host) %>%
   dunn_test(area ~ pop, p.adjust.method = 'BH') %>%
   add_xy_position()
 
-gran_p <- f_letters(p_gran, 'C57BL/6')
+gran_p1 <- f_letters(p_gran, 'BALB/c')
+gran_p2 <- f_letters(p_gran, 'C57BL/6')
+
+gran_p <- bind_rows(gran_p1, gran_p2)
 
 p_gran_h <- df_granulomas %>%
   group_by(pop) %>%
@@ -496,11 +545,12 @@ plot_granuloma <-
   ylab("Granuloma area (\u03BCm2)") +
   geom_vline(data=df_granulomas[df_granulomas$host=="BALB/c",], aes(xintercept=4.5)) +
   geom_text(data = p_gran_h, aes(label = p.adj.signif), vjust = -0.5, y = 4) +
-  geom_text(data = kw_granuloma, aes(label = paste0(method, ", p = ", round(p,3)), y = 2.6E05) )+
+  geom_text(data = subset(kw_granuloma, host == 'BALB/c'), aes(label = paste0(method, ", p = ", format(round(p, 3), nsmall = 3)), y = 3.6E05) )+
+  geom_text(data = subset(kw_granuloma, host == 'C57BL/6'), aes(label = paste0(method, ", p < 0.001"), y = 3.6E05) )+
   scale_fill_manual(values = my_color) +
   my_theme() +
   #theme(text = element_text(size =18)) +
-  geom_text(data = gran_p, aes(label = letter), vjust = -0.5, y = 2.17E+05)  # +
+  geom_text(data = gran_p, aes(label = letter), vjust = -0.5, y = 2.4E+05)  # +
   #add_pvalue(p_gran, tip.length = 0.01, label.size = 5)
 
 
