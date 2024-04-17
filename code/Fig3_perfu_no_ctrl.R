@@ -66,10 +66,9 @@ all_df$pop <- factor(all_df$pop, levels = c('Control', 'BRE', 'EG', 'LE', 'OR'),
                     labels = c('Ctrl', 'BRE', 'EG', 'LE', 'OR'))
 
 #Normalize by penetration rate
-all_df <- all_df %>%
-  mutate(across(c(-penrate, -host, -pop, -sample), ~ ./penrate))
-
-
+all_df <-  all_df %>%
+  mutate(across(c(-penrate, -host, -pop, -sample), ~ ifelse(pop == 'Ctrl', ., ./penrate)))
+                
 #+++++++++++++++++++++++++++
 # Function for letters ####
 #+++++++++++++++++++++++++++
@@ -366,9 +365,6 @@ plot_spleen <-
 #++++++++++++++++++++++
 #### Intestine length ####
 #++++++++++++++++++++++
-# Normalize by penetratoin rate
-all_df <- all_df %>%
-  mutate(intestine_length = ifelse(pop == 'Ctrl', intestine_length, intestine_length/penrate))
 
 # Perform normality tests 
 all_df %>%
